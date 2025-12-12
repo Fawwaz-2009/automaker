@@ -70,14 +70,14 @@ export function FeatureDefaultsSection({
         {/* Separator */}
         <div className="border-t border-border" />
 
-        {/* Skip Tests Setting */}
+        {/* Automated Testing Setting */}
         <div className="space-y-3">
           <div className="flex items-start space-x-3">
             <Checkbox
               id="default-skip-tests"
-              checked={defaultSkipTests}
+              checked={!defaultSkipTests}
               onCheckedChange={(checked) =>
-                onDefaultSkipTestsChange(checked === true)
+                onDefaultSkipTestsChange(checked !== true)
               }
               className="mt-0.5"
               data-testid="default-skip-tests-checkbox"
@@ -88,12 +88,13 @@ export function FeatureDefaultsSection({
                 className="text-foreground cursor-pointer font-medium flex items-center gap-2"
               >
                 <TestTube className="w-4 h-4 text-brand-500" />
-                Skip automated testing by default
+                Enable automated testing by default
               </Label>
               <p className="text-xs text-muted-foreground">
-                When enabled, new features will default to manual verification
-                instead of TDD (test-driven development). You can still override
-                this for individual features.
+                When enabled, new features will use TDD (test-driven
+                development) with automated tests. When disabled, features will
+                require manual verification. You can still override this for
+                individual features.
               </p>
             </div>
           </div>

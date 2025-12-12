@@ -2322,11 +2322,11 @@ export function BoardView() {
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="skip-tests"
-                  checked={newFeature.skipTests}
+                  checked={!newFeature.skipTests}
                   onCheckedChange={(checked) =>
                     setNewFeature({
                       ...newFeature,
-                      skipTests: checked === true,
+                      skipTests: checked !== true,
                     })
                   }
                   data-testid="skip-tests-checkbox"
@@ -2336,14 +2336,14 @@ export function BoardView() {
                     htmlFor="skip-tests"
                     className="text-sm cursor-pointer"
                   >
-                    Skip automated testing
+                    Enable automated testing
                   </Label>
                   <FlaskConical className="w-3.5 h-3.5 text-muted-foreground" />
                 </div>
               </div>
               <p className="text-xs text-muted-foreground">
-                When enabled, this feature will require manual verification
-                instead of automated TDD.
+                When enabled, this feature will use automated TDD. When
+                disabled, it will require manual verification.
               </p>
 
               {/* Verification Steps - Only shown when skipTests is enabled */}
@@ -2742,11 +2742,11 @@ export function BoardView() {
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="edit-skip-tests"
-                    checked={editingFeature.skipTests ?? false}
+                    checked={!(editingFeature.skipTests ?? false)}
                     onCheckedChange={(checked) =>
                       setEditingFeature({
                         ...editingFeature,
-                        skipTests: checked === true,
+                        skipTests: checked !== true,
                       })
                     }
                     data-testid="edit-skip-tests-checkbox"
@@ -2756,14 +2756,14 @@ export function BoardView() {
                       htmlFor="edit-skip-tests"
                       className="text-sm cursor-pointer"
                     >
-                      Skip automated testing
+                      Enable automated testing
                     </Label>
                     <FlaskConical className="w-3.5 h-3.5 text-muted-foreground" />
                   </div>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  When enabled, this feature will require manual verification
-                  instead of automated TDD.
+                  When enabled, this feature will use automated TDD. When
+                  disabled, it will require manual verification.
                 </p>
 
                 {/* Verification Steps - Only shown when skipTests is enabled */}

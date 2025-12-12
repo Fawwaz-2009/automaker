@@ -540,7 +540,7 @@ const initialState: AppState = {
   autoModeActivityLog: [],
   maxConcurrency: 3, // Default to 3 concurrent agents
   kanbanCardDetailLevel: "standard", // Default to standard detail level
-  defaultSkipTests: false, // Default to TDD mode (tests enabled)
+  defaultSkipTests: true, // Default to manual verification (tests disabled)
   useWorktrees: false, // Default to disabled (worktree feature is experimental)
   showProfilesOnly: false, // Default to showing all options (not profiles only)
   keyboardShortcuts: DEFAULT_KEYBOARD_SHORTCUTS, // Default keyboard shortcuts
