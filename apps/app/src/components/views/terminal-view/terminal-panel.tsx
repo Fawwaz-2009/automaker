@@ -68,6 +68,12 @@ export function TerminalPanel({
   // Use refs for callbacks and values to avoid effect re-runs
   const onFocusRef = useRef(onFocus);
   onFocusRef.current = onFocus;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const onSplitHorizontalRef = useRef(onSplitHorizontal);
+  onSplitHorizontalRef.current = onSplitHorizontal;
+  const onSplitVerticalRef = useRef(onSplitVertical);
+  onSplitVerticalRef.current = onSplitVertical;
   const fontSizeRef = useRef(fontSize);
   fontSizeRef.current = fontSize;
   const themeRef = useRef(effectiveTheme);
@@ -172,6 +178,37 @@ export function TerminalPanel({
       // Handle focus - use ref to avoid re-running effect
       terminal.onData(() => {
         onFocusRef.current();
+      });
+
+      // Custom key handler to intercept terminal shortcuts
+      // Return false to prevent xterm from handling the key
+      terminal.attachCustomKeyEventHandler((event) => {
+        // Only intercept keydown events
+        if (event.type !== 'keydown') return true;
+
+        // Alt+D - Split right
+        if (event.altKey && !event.shiftKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'd') {
+          event.preventDefault();
+          onSplitHorizontalRef.current();
+          return false;
+        }
+
+        // Alt+Shift+D - Split down
+        if (event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'd') {
+          event.preventDefault();
+          onSplitVerticalRef.current();
+          return false;
+        }
+
+        // Alt+W - Close terminal
+        if (event.altKey && !event.shiftKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'w') {
+          event.preventDefault();
+          onCloseRef.current();
+          return false;
+        }
+
+        // Let xterm handle all other keys
+        return true;
       });
     };
 
