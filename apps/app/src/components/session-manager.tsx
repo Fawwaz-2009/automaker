@@ -1,12 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { HotkeyButton } from "@/components/ui/hotkey-button";
 import { Input } from "@/components/ui/input";
@@ -116,8 +111,10 @@ export function SessionManager({
     new Set()
   );
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [sessionToDelete, setSessionToDelete] = useState<SessionListItem | null>(null);
-  const [isDeleteAllArchivedDialogOpen, setIsDeleteAllArchivedDialogOpen] = useState(false);
+  const [sessionToDelete, setSessionToDelete] =
+    useState<SessionListItem | null>(null);
+  const [isDeleteAllArchivedDialogOpen, setIsDeleteAllArchivedDialogOpen] =
+    useState(false);
 
   // Check running state for all sessions
   const checkRunningSessions = async (sessionList: SessionListItem[]) => {
@@ -234,11 +231,7 @@ export function SessionManager({
     const api = getElectronAPI();
     if (!editingName.trim() || !api?.sessions) return;
 
-    const result = await api.sessions.update(
-      sessionId,
-      editingName,
-      undefined
-    );
+    const result = await api.sessions.update(sessionId, editingName, undefined);
 
     if (result.success) {
       setEditingSessionId(null);

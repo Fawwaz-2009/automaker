@@ -13,6 +13,9 @@ import {
 const logger = createLogger("Worktree");
 const execAsync = promisify(exec);
 
+export const AUTOMAKER_INITIAL_COMMIT_MESSAGE =
+  "chore: automaker initial commit";
+
 /**
  * Normalize path separators to forward slashes for cross-platform consistency.
  * This ensures paths from `path.join()` (backslashes on Windows) match paths
@@ -73,3 +76,30 @@ export function logWorktreeError(
 // Re-export shared utilities
 export { getErrorMessageShared as getErrorMessage };
 export const logError = createLogError(logger);
+
+/**
+ * Ensure the repository has at least one commit so git commands that rely on HEAD work.
+ * Returns true if an empty commit was created, false if the repo already had commits.
+ */
+export async function ensureInitialCommit(repoPath: string): Promise<boolean> {
+  try {
+    await execAsync("git rev-parse --verify HEAD", { cwd: repoPath });
+    return false;
+  } catch {
+    try {
+      await execAsync(
+        `git commit --allow-empty -m "${AUTOMAKER_INITIAL_COMMIT_MESSAGE}"`,
+        { cwd: repoPath }
+      );
+      logger.info(
+        `[Worktree] Created initial empty commit to enable worktrees in ${repoPath}`
+      );
+      return true;
+    } catch (error) {
+      const reason = getErrorMessageShared(error);
+      throw new Error(
+        `Failed to create initial git commit. Please commit manually and retry. ${reason}`
+      );
+    }
+  }
+}

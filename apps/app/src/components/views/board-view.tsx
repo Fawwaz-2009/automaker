@@ -270,6 +270,17 @@ export function BoardView() {
     fetchBranches();
   }, [currentProject, worktreeRefreshKey]);
 
+  // Calculate unarchived card counts per branch
+  const branchCardCounts = useMemo(() => {
+    return hookFeatures.reduce((counts, feature) => {
+      if (feature.status !== "completed") {
+        const branch = feature.branchName ?? "main";
+        counts[branch] = (counts[branch] || 0) + 1;
+      }
+      return counts;
+    }, {} as Record<string, number>);
+  }, [hookFeatures]);
+
   // Custom collision detection that prioritizes columns over cards
   const collisionDetectionStrategy = useCallback((args: any) => {
     // First, check if pointer is within a column
@@ -302,14 +313,14 @@ export function BoardView() {
         });
 
         if (matchesRemovedWorktree) {
-          // Reset the feature's branch assignment
-          persistFeatureUpdate(feature.id, {
-            branchName: null as unknown as string | undefined,
-          });
+          // Reset the feature's branch assignment - update both local state and persist
+          const updates = { branchName: null as unknown as string | undefined };
+          updateFeature(feature.id, updates);
+          persistFeatureUpdate(feature.id, updates);
         }
       });
     },
-    [hookFeatures, persistFeatureUpdate]
+    [hookFeatures, updateFeature, persistFeatureUpdate]
   );
 
   // Get in-progress features for keyboard shortcuts (needed before actions hook)
@@ -418,6 +429,18 @@ export function BoardView() {
     hookFeaturesRef.current = hookFeatures;
   }, [hookFeatures]);
 
+  // Use a ref to track running tasks to avoid effect re-runs that clear pendingFeaturesRef
+  const runningAutoTasksRef = useRef(runningAutoTasks);
+  useEffect(() => {
+    runningAutoTasksRef.current = runningAutoTasks;
+  }, [runningAutoTasks]);
+
+  // Keep latest start handler without retriggering the auto mode effect
+  const handleStartImplementationRef = useRef(handleStartImplementation);
+  useEffect(() => {
+    handleStartImplementationRef.current = handleStartImplementation;
+  }, [handleStartImplementation]);
+
   // Track features that are pending (started but not yet confirmed running)
   const pendingFeaturesRef = useRef<Set<string>>(new Set());
 
@@ -485,8 +508,9 @@ export function BoardView() {
         }
 
         // Count currently running tasks + pending features
+        // Use ref to get the latest running tasks without causing effect re-runs
         const currentRunning =
-          runningAutoTasks.length + pendingFeaturesRef.current.size;
+          runningAutoTasksRef.current.length + pendingFeaturesRef.current.size;
         const availableSlots = maxConcurrency - currentRunning;
 
         // No available slots, skip check
@@ -541,6 +565,10 @@ export function BoardView() {
 
         // Start features up to available slots
         const featuresToStart = eligibleFeatures.slice(0, availableSlots);
+        const startImplementation = handleStartImplementationRef.current;
+        if (!startImplementation) {
+          return;
+        }
 
         for (const feature of featuresToStart) {
           // Check again before starting each feature
@@ -566,7 +594,7 @@ export function BoardView() {
           }
 
           // Start the implementation - server will derive workDir from feature.branchName
-          const started = await handleStartImplementation(feature);
+          const started = await startImplementation(feature);
 
           // If successfully started, track it as pending until we receive the start event
           if (started) {
@@ -580,7 +608,7 @@ export function BoardView() {
 
     // Check immediately, then every 3 seconds
     checkAndStartFeatures();
-    const interval = setInterval(checkAndStartFeatures, 3000);
+    const interval = setInterval(checkAndStartFeatures, 1000);
 
     return () => {
       // Mark as inactive to prevent any pending async operations from continuing
@@ -592,7 +620,8 @@ export function BoardView() {
   }, [
     autoMode.isRunning,
     currentProject,
-    runningAutoTasks,
+    // runningAutoTasks is accessed via runningAutoTasksRef to prevent effect re-runs
+    // that would clear pendingFeaturesRef and cause concurrency issues
     maxConcurrency,
     // hookFeatures is accessed via hookFeaturesRef to prevent effect re-runs
     currentWorktreeBranch,
@@ -601,7 +630,6 @@ export function BoardView() {
     isPrimaryWorktreeBranch,
     enableDependencyBlocking,
     persistFeatureUpdate,
-    handleStartImplementation,
   ]);
 
   // Use keyboard shortcuts hook (after actions hook)
@@ -640,7 +668,9 @@ export function BoardView() {
   // Find feature for pending plan approval
   const pendingApprovalFeature = useMemo(() => {
     if (!pendingPlanApproval) return null;
-    return hookFeatures.find((f) => f.id === pendingPlanApproval.featureId) || null;
+    return (
+      hookFeatures.find((f) => f.id === pendingPlanApproval.featureId) || null
+    );
   }, [pendingPlanApproval, hookFeatures]);
 
   // Handle plan approval
@@ -666,10 +696,10 @@ export function BoardView() {
         if (result.success) {
           // Immediately update local feature state to hide "Approve Plan" button
           // Get current feature to preserve version
-          const currentFeature = hookFeatures.find(f => f.id === featureId);
+          const currentFeature = hookFeatures.find((f) => f.id === featureId);
           updateFeature(featureId, {
             planSpec: {
-              status: 'approved',
+              status: "approved",
               content: editedPlan || pendingPlanApproval.planContent,
               version: currentFeature?.planSpec?.version || 1,
               approvedAt: new Date().toISOString(),
@@ -688,7 +718,14 @@ export function BoardView() {
         setPendingPlanApproval(null);
       }
     },
-    [pendingPlanApproval, currentProject, setPendingPlanApproval, updateFeature, loadFeatures, hookFeatures]
+    [
+      pendingPlanApproval,
+      currentProject,
+      setPendingPlanApproval,
+      updateFeature,
+      loadFeatures,
+      hookFeatures,
+    ]
   );
 
   // Handle plan rejection
@@ -715,11 +752,11 @@ export function BoardView() {
         if (result.success) {
           // Immediately update local feature state
           // Get current feature to preserve version
-          const currentFeature = hookFeatures.find(f => f.id === featureId);
+          const currentFeature = hookFeatures.find((f) => f.id === featureId);
           updateFeature(featureId, {
-            status: 'backlog',
+            status: "backlog",
             planSpec: {
-              status: 'rejected',
+              status: "rejected",
               content: pendingPlanApproval.planContent,
               version: currentFeature?.planSpec?.version || 1,
               reviewedByUser: true,
@@ -737,7 +774,14 @@ export function BoardView() {
         setPendingPlanApproval(null);
       }
     },
-    [pendingPlanApproval, currentProject, setPendingPlanApproval, updateFeature, loadFeatures, hookFeatures]
+    [
+      pendingPlanApproval,
+      currentProject,
+      setPendingPlanApproval,
+      updateFeature,
+      loadFeatures,
+      hookFeatures,
+    ]
   );
 
   // Handle opening approval dialog from feature card button
@@ -748,7 +792,7 @@ export function BoardView() {
       // Determine the planning mode for approval (skip should never have a plan requiring approval)
       const mode = feature.planningMode;
       const approvalMode: "lite" | "spec" | "full" =
-        mode === 'lite' || mode === 'spec' || mode === 'full' ? mode : 'spec';
+        mode === "lite" || mode === "spec" || mode === "full" ? mode : "spec";
 
       // Re-open the approval dialog with the feature's plan data
       setPendingPlanApproval({
@@ -833,6 +877,7 @@ export function BoardView() {
         }}
         onRemovedWorktrees={handleRemovedWorktrees}
         runningFeatureIds={runningAutoTasks}
+        branchCardCounts={branchCardCounts}
         features={hookFeatures.map((f) => ({
           id: f.id,
           branchName: f.branchName,
@@ -929,6 +974,7 @@ export function BoardView() {
         onAdd={handleAddFeature}
         categorySuggestions={categorySuggestions}
         branchSuggestions={branchSuggestions}
+        branchCardCounts={branchCardCounts}
         defaultSkipTests={defaultSkipTests}
         defaultBranch={selectedWorktreeBranch}
         currentBranch={currentWorktreeBranch || undefined}
@@ -944,6 +990,7 @@ export function BoardView() {
         onUpdate={handleUpdateFeature}
         categorySuggestions={categorySuggestions}
         branchSuggestions={branchSuggestions}
+        branchCardCounts={branchCardCounts}
         currentBranch={currentWorktreeBranch || undefined}
         isMaximized={isMaximized}
         showProfilesOnly={showProfilesOnly}
@@ -1065,15 +1112,24 @@ export function BoardView() {
         onOpenChange={setShowDeleteWorktreeDialog}
         projectPath={currentProject.path}
         worktree={selectedWorktreeForAction}
+        affectedFeatureCount={
+          selectedWorktreeForAction
+            ? hookFeatures.filter(
+                (f) => f.branchName === selectedWorktreeForAction.branch
+              ).length
+            : 0
+        }
         onDeleted={(deletedWorktree, _deletedBranch) => {
           // Reset features that were assigned to the deleted worktree (by branch)
           hookFeatures.forEach((feature) => {
             // Match by branch name since worktreePath is no longer stored
             if (feature.branchName === deletedWorktree.branch) {
-              // Reset the feature's branch assignment
-              persistFeatureUpdate(feature.id, {
+              // Reset the feature's branch assignment - update both local state and persist
+              const updates = {
                 branchName: null as unknown as string | undefined,
-              });
+              };
+              updateFeature(feature.id, updates);
+              persistFeatureUpdate(feature.id, updates);
             }
           });
 
