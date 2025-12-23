@@ -174,7 +174,7 @@ export function ProjectSelectorWithOptions({
               >
                 <div
                   ref={scrollContainerRef}
-                  className="space-y-0.5 max-h-64 overflow-y-auto overflow-x-hidden scroll-smooth project-picker-scroll"
+                  className="space-y-0.5 max-h-64 overflow-y-auto overflow-x-hidden scroll-smooth scrollbar-styled"
                 >
                   {filteredProjects.map((project, index) => (
                     <SortableProjectItem

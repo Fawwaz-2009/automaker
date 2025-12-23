@@ -870,32 +870,6 @@
   animation: accordion-up 0.2s ease-out forwards;
 }
 
-/* Project picker scrollbar styling */
-.project-picker-scroll {
-  scrollbar-width: thin;
-  scrollbar-color: var(--muted-foreground) transparent;
-}
-
-.project-picker-scroll::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-.project-picker-scroll::-webkit-scrollbar-track {
-  background: transparent;
-  border-radius: 3px;
-}
-
-.project-picker-scroll::-webkit-scrollbar-thumb {
-  background: var(--muted-foreground);
-  border-radius: 3px;
-  min-height: 30px;
-}
-
-.project-picker-scroll::-webkit-scrollbar-thumb:hover {
-  background: var(--foreground-secondary);
-}
-
 /* Terminal scrollbar theming */
 .xterm-viewport::-webkit-scrollbar {
   width: 8px;
