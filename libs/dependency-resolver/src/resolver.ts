@@ -212,7 +212,8 @@ export function getBlockingDependencies(feature: Feature, allFeatures: Feature[]
 
 /**
  * Checks if adding a dependency from sourceId to targetId would create a circular dependency.
- * Uses DFS to detect if targetId can reach sourceId through existing dependencies.
+ * When we say "targetId depends on sourceId", we add sourceId to targetId.dependencies.
+ * A cycle would occur if sourceId already depends on targetId (directly or transitively).
  *
  * @param features - All features in the system
  * @param sourceId - The feature that would become a dependency (the prerequisite)
@@ -227,22 +228,24 @@ export function wouldCreateCircularDependency(
   const featureMap = new Map(features.map((f) => [f.id, f]));
   const visited = new Set<string>();
 
-  function canReach(currentId: string, target: string): boolean {
-    if (currentId === target) return true;
-    if (visited.has(currentId)) return false;
+  // Check if 'from' can reach 'to' by following dependencies
+  function canReach(fromId: string, toId: string): boolean {
+    if (fromId === toId) return true;
+    if (visited.has(fromId)) return false;
 
-    visited.add(currentId);
-    const feature = featureMap.get(currentId);
+    visited.add(fromId);
+    const feature = featureMap.get(fromId);
     if (!feature?.dependencies) return false;
 
     for (const depId of feature.dependencies) {
-      if (canReach(depId, target)) return true;
+      if (canReach(depId, toId)) return true;
     }
     return false;
   }
 
-  // Check if source can reach target through existing dependencies
-  // If so, adding target -> source would create a cycle
+  // We want to add: targetId depends on sourceId (sourceId -> targetId in dependency graph)
+  // This would create a cycle if sourceId already depends on targetId (transitively)
+  // i.e., if we can reach targetId starting from sourceId by following dependencies
   return canReach(sourceId, targetId);
 }
 
@@ -321,8 +324,10 @@ export function getAncestors(
 
 /**
  * Formats ancestor context for inclusion in a task description.
+ * The parent task (depth=-1) is formatted with special emphasis indicating
+ * it was already completed and is provided for context only.
  *
- * @param ancestors - Array of ancestor contexts (including parent)
+ * @param ancestors - Array of ancestor contexts (including parent with depth=-1)
  * @param selectedIds - Set of selected ancestor IDs to include
  * @returns Formatted markdown string with ancestor context
  */
@@ -333,24 +338,59 @@ export function formatAncestorContextForPrompt(
   const selectedAncestors = ancestors.filter((a) => selectedIds.has(a.id));
   if (selectedAncestors.length === 0) return '';
 
-  const sections = selectedAncestors.map((ancestor) => {
-    const parts: string[] = [];
-    const title = ancestor.title || `Task (${ancestor.id.slice(0, 8)})`;
+  // Separate parent (depth=-1) from other ancestors
+  const parent = selectedAncestors.find((a) => a.depth === -1);
+  const otherAncestors = selectedAncestors.filter((a) => a.depth !== -1);
 
-    parts.push(`### ${title}`);
+  const sections: string[] = [];
 
-    if (ancestor.description) {
-      parts.push(`**Description:** ${ancestor.description}`);
+  // Format parent with special emphasis
+  if (parent) {
+    const parentTitle = parent.title || `Task (${parent.id.slice(0, 8)})`;
+    const parentParts: string[] = [];
+
+    parentParts.push(`## Parent Task Context (Already Completed)`);
+    parentParts.push(
+      `> **Note:** The following parent task has already been completed. This context is provided to help you understand the background and requirements for this sub-task. Do not re-implement the parent task - focus only on the new sub-task described below.`
+    );
+    parentParts.push(`### ${parentTitle}`);
+
+    if (parent.description) {
+      parentParts.push(`**Description:** ${parent.description}`);
     }
-    if (ancestor.spec) {
-      parts.push(`**Specification:**\n${ancestor.spec}`);
+    if (parent.spec) {
+      parentParts.push(`**Specification:**\n${parent.spec}`);
     }
-    if (ancestor.summary) {
-      parts.push(`**Summary:** ${ancestor.summary}`);
+    if (parent.summary) {
+      parentParts.push(`**Summary:** ${parent.summary}`);
     }
 
-    return parts.join('\n\n');
-  });
+    sections.push(parentParts.join('\n\n'));
+  }
 
-  return `## Ancestor Context\n\n${sections.join('\n\n---\n\n')}`;
+  // Format other ancestors if any
+  if (otherAncestors.length > 0) {
+    const ancestorSections = otherAncestors.map((ancestor) => {
+      const parts: string[] = [];
+      const title = ancestor.title || `Task (${ancestor.id.slice(0, 8)})`;
+
+      parts.push(`### ${title}`);
+
+      if (ancestor.description) {
+        parts.push(`**Description:** ${ancestor.description}`);
+      }
+      if (ancestor.spec) {
+        parts.push(`**Specification:**\n${ancestor.spec}`);
+      }
+      if (ancestor.summary) {
+        parts.push(`**Summary:** ${ancestor.summary}`);
+      }
+
+      return parts.join('\n\n');
+    });
+
+    sections.push(`## Additional Ancestor Context\n\n${ancestorSections.join('\n\n---\n\n')}`);
+  }
+
+  return sections.join('\n\n---\n\n');
 }

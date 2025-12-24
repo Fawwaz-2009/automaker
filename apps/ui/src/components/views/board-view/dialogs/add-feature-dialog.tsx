@@ -169,9 +169,8 @@ export function AddFeatureDialog({
       if (parentFeature) {
         const ancestorList = getAncestors(parentFeature, allFeatures);
         setAncestors(ancestorList);
-        // Select all ancestors by default (including parent)
-        const allIds = new Set([parentFeature.id, ...ancestorList.map((a) => a.id)]);
-        setSelectedAncestorIds(allIds);
+        // Only select parent by default - ancestors are optional context
+        setSelectedAncestorIds(new Set([parentFeature.id]));
       } else {
         setAncestors([]);
         setSelectedAncestorIds(new Set());

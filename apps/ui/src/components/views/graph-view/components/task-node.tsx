@@ -15,6 +15,7 @@ import {
   Terminal,
   RotateCcw,
   GitFork,
+  Trash2,
 } from 'lucide-react';
 import { TaskNodeData } from '../hooks/use-graph-nodes';
 import { Button } from '@/components/ui/button';
@@ -91,8 +92,10 @@ export const TaskNode = memo(function TaskNode({ data, selected }: TaskNodeProps
     <>
       {/* Target handle (left side - receives dependencies) */}
       <Handle
+        id="target"
         type="target"
         position={Position.Left}
+        isConnectable={true}
         className={cn(
           'w-3 h-3 !bg-border border-2 border-background',
           'transition-colors duration-200',
@@ -277,6 +280,18 @@ export const TaskNode = memo(function TaskNode({ data, selected }: TaskNodeProps
                   <GitFork className="w-3 h-3 mr-2" />
                   Spawn Sub-Task
                 </DropdownMenuItem>
+                {!data.isRunning && (
+                  <DropdownMenuItem
+                    className="text-xs text-[var(--status-error)] cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      data.onDeleteTask?.();
+                    }}
+                  >
+                    <Trash2 className="w-3 h-3 mr-2" />
+                    Delete Task
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -336,8 +351,10 @@ export const TaskNode = memo(function TaskNode({ data, selected }: TaskNodeProps
 
       {/* Source handle (right side - provides to dependents) */}
       <Handle
+        id="source"
         type="source"
         position={Position.Right}
+        isConnectable={true}
         className={cn(
           'w-3 h-3 !bg-border border-2 border-background',
           'transition-colors duration-200',

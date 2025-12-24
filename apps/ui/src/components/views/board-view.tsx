@@ -1057,6 +1057,7 @@ export function BoardView() {
               setSpawnParentFeature(feature);
               setShowAddDialog(true);
             }}
+            onDeleteTask={(feature) => handleDeleteFeature(feature.id)}
           />
         )}
       </div>

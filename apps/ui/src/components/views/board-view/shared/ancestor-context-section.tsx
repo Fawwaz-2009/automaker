@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, ChevronRight, Users } from 'lucide-react';
+import { ChevronDown, ChevronRight, Users, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AncestorContext } from '@automaker/dependency-resolver';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -102,7 +102,8 @@ export function AncestorContextSection({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Select ancestors to include their context in the new task&apos;s prompt.
+        The parent task context will be included to help the AI understand the background.
+        Additional ancestors can optionally be included for more context.
       </p>
 
       <div className="space-y-1 max-h-[200px] overflow-y-auto border rounded-lg p-2 bg-muted/20">
@@ -122,7 +123,13 @@ export function AncestorContextSection({
               <div
                 className={cn(
                   'flex items-start gap-2 p-2 rounded-md transition-colors',
-                  isSelected ? 'bg-primary/10' : 'hover:bg-muted/50'
+                  item.isParent
+                    ? isSelected
+                      ? 'bg-[var(--status-success-bg)] border border-[var(--status-success)]/30'
+                      : 'bg-muted/30 border border-border hover:bg-muted/50'
+                    : isSelected
+                      ? 'bg-primary/10'
+                      : 'hover:bg-muted/50'
                 )}
                 style={{ marginLeft: item.isParent ? 0 : `${item.depth * 12}px` }}
               >
@@ -156,10 +163,13 @@ export function AncestorContextSection({
                       className="text-sm font-medium cursor-pointer truncate flex-1"
                     >
                       {displayTitle}
-                      {item.isParent && (
-                        <span className="ml-2 text-xs text-primary font-normal">(Parent)</span>
-                      )}
                     </label>
+                    {item.isParent && (
+                      <span className="ml-2 inline-flex items-center gap-1 text-xs text-[var(--status-success)] font-medium">
+                        <CheckCircle2 className="w-3 h-3" />
+                        Completed Parent
+                      </span>
+                    )}
                   </div>
 
                   <CollapsibleContent>

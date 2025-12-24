@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import {
   ReactFlow,
   Background,
@@ -110,10 +110,52 @@ function GraphCanvasInner({
   const [nodes, setNodes, onNodesChange] = useNodesState(layoutedNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(layoutedEdges);
 
-  // Update nodes/edges when features change
+  // Track if initial layout has been applied
+  const hasInitialLayout = useRef(false);
+  // Track the previous node IDs to detect new nodes
+  const prevNodeIds = useRef<Set<string>>(new Set());
+
+  // Update nodes/edges when features change, but preserve user positions
   useEffect(() => {
-    setNodes(layoutedNodes);
-    setEdges(layoutedEdges);
+    const currentNodeIds = new Set(layoutedNodes.map((n) => n.id));
+    const isInitialRender = !hasInitialLayout.current;
+
+    // Check if there are new nodes that need layout
+    const hasNewNodes = layoutedNodes.some((n) => !prevNodeIds.current.has(n.id));
+
+    if (isInitialRender) {
+      // Apply full layout for initial render
+      setNodes(layoutedNodes);
+      setEdges(layoutedEdges);
+      hasInitialLayout.current = true;
+    } else if (hasNewNodes) {
+      // New nodes added - need to re-layout but try to preserve existing positions
+      setNodes((currentNodes) => {
+        const positionMap = new Map(currentNodes.map((n) => [n.id, n.position]));
+        return layoutedNodes.map((node) => ({
+          ...node,
+          position: positionMap.get(node.id) || node.position,
+        }));
+      });
+      setEdges(layoutedEdges);
+    } else {
+      // No new nodes - just update data without changing positions
+      setNodes((currentNodes) => {
+        const positionMap = new Map(currentNodes.map((n) => [n.id, n.position]));
+        // Filter to only include nodes that still exist
+        const existingNodeIds = new Set(layoutedNodes.map((n) => n.id));
+
+        return layoutedNodes.map((node) => ({
+          ...node,
+          position: positionMap.get(node.id) || node.position,
+        }));
+      });
+      // Update edges without triggering re-render of nodes
+      setEdges(layoutedEdges);
+    }
+
+    // Update prev node IDs for next comparison
+    prevNodeIds.current = currentNodeIds;
   }, [layoutedNodes, layoutedEdges, setNodes, setEdges]);
 
   // Handle layout direction change
@@ -154,6 +196,16 @@ function GraphCanvasInner({
     [onCreateDependency]
   );
 
+  // Allow any connection between different nodes
+  const isValidConnection = useCallback(
+    (connection: Connection | { source: string; target: string }) => {
+      // Don't allow self-connections
+      if (connection.source === connection.target) return false;
+      return true;
+    },
+    []
+  );
+
   // MiniMap node color based on status
   const minimapNodeColor = useCallback((node: Node<TaskNodeData>) => {
     const data = node.data as TaskNodeData | undefined;
@@ -182,6 +234,7 @@ function GraphCanvasInner({
         onEdgesChange={onEdgesChange}
         onNodeDoubleClick={handleNodeDoubleClick}
         onConnect={handleConnect}
+        isValidConnection={isValidConnection}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
