@@ -324,7 +324,7 @@ function PathInput({
                       </kbd>
                     </div>
                   </div>
-                  <CommandList>
+                  <CommandList className="scrollbar-styled">
                     <CommandEmpty>No files or directories found</CommandEmpty>
                     <CommandGroup>
                       {entries.map((entry) => (
