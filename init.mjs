@@ -352,14 +352,21 @@ async function main() {
         fs.mkdirSync(path.join(__dirname, 'logs'), { recursive: true });
       }
 
-      // Start server in background
+      // Start server in background, showing output in console AND logging to file
       const logStream = fs.createWriteStream(path.join(__dirname, 'logs', 'server.log'));
       serverProcess = runNpm(['run', 'dev:server'], {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
-      serverProcess.stdout?.pipe(logStream);
-      serverProcess.stderr?.pipe(logStream);
+      // Pipe to both log file and console so user can see API key
+      serverProcess.stdout?.on('data', (data) => {
+        process.stdout.write(data);
+        logStream.write(data);
+      });
+      serverProcess.stderr?.on('data', (data) => {
+        process.stderr.write(data);
+        logStream.write(data);
+      });
 
       log('Waiting for server to be ready...', 'yellow');
 

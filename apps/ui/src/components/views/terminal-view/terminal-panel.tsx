@@ -40,6 +40,7 @@ import {
 } from '@/config/terminal-themes';
 import { toast } from 'sonner';
 import { getElectronAPI } from '@/lib/electron';
+import { getApiKey } from '@/lib/http-api-client';
 
 // Font size constraints
 const MIN_FONT_SIZE = 8;
@@ -940,8 +941,17 @@ export function TerminalPanel({
     if (!terminal) return;
 
     const connect = () => {
-      // Build WebSocket URL with token
+      // Build WebSocket URL with auth params
       let url = `${wsUrl}/api/terminal/ws?sessionId=${sessionId}`;
+
+      // Add API key for Electron mode auth
+      const apiKey = getApiKey();
+      if (apiKey) {
+        url += `&apiKey=${encodeURIComponent(apiKey)}`;
+      }
+      // In web mode, cookies are sent automatically with same-origin WebSocket
+
+      // Add terminal password token if required
       if (authToken) {
         url += `&token=${encodeURIComponent(authToken)}`;
       }

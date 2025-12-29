@@ -12,12 +12,13 @@ import { ClaudeUsage } from '../routes/claude/types.js';
  *
  * Platform-specific implementations:
  * - macOS: Uses 'expect' command for PTY
- * - Windows: Uses node-pty for PTY
+ * - Windows/Linux: Uses node-pty for PTY
  */
 export class ClaudeUsageService {
   private claudeBinary = 'claude';
   private timeout = 30000; // 30 second timeout
   private isWindows = os.platform() === 'win32';
+  private isLinux = os.platform() === 'linux';
 
   /**
    * Check if Claude CLI is available on the system
@@ -48,8 +49,8 @@ export class ClaudeUsageService {
    * Uses platform-specific PTY implementation
    */
   private executeClaudeUsageCommand(): Promise<string> {
-    if (this.isWindows) {
-      return this.executeClaudeUsageCommandWindows();
+    if (this.isWindows || this.isLinux) {
+      return this.executeClaudeUsageCommandPty();
     }
     return this.executeClaudeUsageCommandMac();
   }
@@ -147,17 +148,23 @@ export class ClaudeUsageService {
   }
 
   /**
-   * Windows implementation using node-pty
+   * Windows/Linux implementation using node-pty
    */
-  private executeClaudeUsageCommandWindows(): Promise<string> {
+  private executeClaudeUsageCommandPty(): Promise<string> {
     return new Promise((resolve, reject) => {
       let output = '';
       let settled = false;
       let hasSeenUsageData = false;
 
-      const workingDirectory = process.env.USERPROFILE || os.homedir() || 'C:\\';
+      const workingDirectory = this.isWindows
+        ? process.env.USERPROFILE || os.homedir() || 'C:\\'
+        : process.env.HOME || os.homedir() || '/tmp';
 
-      const ptyProcess = pty.spawn('cmd.exe', ['/c', 'claude', '/usage'], {
+      // Use platform-appropriate shell and command
+      const shell = this.isWindows ? 'cmd.exe' : '/bin/sh';
+      const args = this.isWindows ? ['/c', 'claude', '/usage'] : ['-c', 'claude /usage'];
+
+      const ptyProcess = pty.spawn(shell, args, {
         name: 'xterm-256color',
         cols: 120,
         rows: 30,

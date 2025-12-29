@@ -14,6 +14,7 @@ import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { getJSON, setJSON } from '@/lib/storage';
 import { getDefaultWorkspaceDirectory, saveLastProjectDirectory } from '@/lib/workspace-config';
 import { useOSDetection } from '@/hooks';
+import { apiPost } from '@/lib/api-fetch';
 
 interface DirectoryEntry {
   name: string;
@@ -98,16 +99,7 @@ export function FileBrowserDialog({
     setWarning('');
 
     try {
-      // Get server URL from environment or default
-      const serverUrl = import.meta.env.VITE_SERVER_URL || 'http://localhost:3008';
-
-      const response = await fetch(`${serverUrl}/api/fs/browse`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dirPath }),
-      });
-
-      const result: BrowseResult = await response.json();
+      const result = await apiPost<BrowseResult>('/api/fs/browse', { dirPath });
 
       if (result.success) {
         setCurrentPath(result.currentPath);

@@ -8,6 +8,7 @@
 import path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import fs from 'fs';
+import crypto from 'crypto';
 import http, { Server } from 'http';
 import { app, BrowserWindow, ipcMain, dialog, shell, screen } from 'electron';
 import { findNodeExecutable, buildEnhancedPath } from '@automaker/platform';
@@ -58,6 +59,46 @@ interface WindowBounds {
 
 // Debounce timer for saving window bounds
 let saveWindowBoundsTimeout: ReturnType<typeof setTimeout> | null = null;
+
+// API key for CSRF protection
+let apiKey: string | null = null;
+
+/**
+ * Get path to API key file in user data directory
+ */
+function getApiKeyPath(): string {
+  return path.join(app.getPath('userData'), '.api-key');
+}
+
+/**
+ * Ensure an API key exists - load from file or generate new one.
+ * This key is passed to the server for CSRF protection.
+ */
+function ensureApiKey(): string {
+  const keyPath = getApiKeyPath();
+  try {
+    if (fs.existsSync(keyPath)) {
+      const key = fs.readFileSync(keyPath, 'utf-8').trim();
+      if (key) {
+        apiKey = key;
+        console.log('[Electron] Loaded existing API key');
+        return apiKey;
+      }
+    }
+  } catch (error) {
+    console.warn('[Electron] Error reading API key:', error);
+  }
+
+  // Generate new key
+  apiKey = crypto.randomUUID();
+  try {
+    fs.writeFileSync(keyPath, apiKey, { encoding: 'utf-8', mode: 0o600 });
+    console.log('[Electron] Generated new API key');
+  } catch (error) {
+    console.error('[Electron] Failed to save API key:', error);
+  }
+  return apiKey;
+}
 
 /**
  * Get icon path - works in both dev and production, cross-platform
@@ -331,6 +372,8 @@ async function startServer(): Promise<void> {
     PORT: SERVER_PORT.toString(),
     DATA_DIR: app.getPath('userData'),
     NODE_PATH: serverNodeModules,
+    // Pass API key to server for CSRF protection
+    AUTOMAKER_API_KEY: apiKey!,
     // Only set ALLOWED_ROOT_DIRECTORY if explicitly provided in environment
     // If not set, server will allow access to all paths
     ...(process.env.ALLOWED_ROOT_DIRECTORY && {
@@ -509,6 +552,9 @@ app.whenReady().then(async () => {
     }
   }
 
+  // Generate or load API key for CSRF protection (before starting server)
+  ensureApiKey();
+
   try {
     // Start static file server in production
     if (app.isPackaged) {
@@ -664,6 +710,11 @@ ipcMain.handle('ping', async () => {
 // Get server URL for HTTP client
 ipcMain.handle('server:getUrl', async () => {
   return `http://localhost:${SERVER_PORT}`;
+});
+
+// Get API key for authentication
+ipcMain.handle('auth:getApiKey', () => {
+  return apiKey;
 });
 
 // Window management - update minimum width based on sidebar state

@@ -9,6 +9,12 @@ import {
 import { useAppStore } from '@/store/app-store';
 import { useSetupStore } from '@/store/setup-store';
 import { getElectronAPI } from '@/lib/electron';
+import {
+  initApiKey,
+  checkAuthStatus,
+  isElectronMode,
+  fetchSessionToken,
+} from '@/lib/http-api-client';
 import { Toaster } from 'sonner';
 import { ThemeOption, themeOptions } from '@/config/theme-options';
 
@@ -22,6 +28,8 @@ function RootLayoutContent() {
   const [setupHydrated, setSetupHydrated] = useState(
     () => useSetupStore.persist?.hasHydrated?.() ?? false
   );
+  const [authChecked, setAuthChecked] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const { openFileBrowser } = useFileBrowser();
 
   // Hidden streamer panel - opens with "\" key
@@ -69,6 +77,51 @@ function RootLayoutContent() {
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Initialize authentication
+  // - Electron mode: Uses API key from IPC (header-based auth)
+  // - Web mode: Uses session token (fetched from cookie session for explicit header auth)
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        // Initialize API key for Electron mode
+        await initApiKey();
+
+        // In Electron mode, we're always authenticated via header
+        if (isElectronMode()) {
+          setIsAuthenticated(true);
+          setAuthChecked(true);
+          return;
+        }
+
+        // In web mode, try to fetch session token (works if cookie is valid)
+        // This allows explicit header-based auth which works better cross-origin
+        const tokenFetched = await fetchSessionToken();
+
+        if (tokenFetched) {
+          // We have a valid session - token is now stored in memory
+          setIsAuthenticated(true);
+          setAuthChecked(true);
+          return;
+        }
+
+        // Fallback: check auth status via cookie
+        const status = await checkAuthStatus();
+        setIsAuthenticated(status.authenticated);
+        setAuthChecked(true);
+
+        // Redirect to login if not authenticated and not already on login page
+        if (!status.authenticated && location.pathname !== '/login') {
+          navigate({ to: '/login' });
+        }
+      } catch (error) {
+        console.error('Failed to initialize auth:', error);
+        setAuthChecked(true);
+      }
+    };
+
+    initAuth();
+  }, [location.pathname, navigate]);
 
   // Wait for setup store hydration before enforcing routing rules
   useEffect(() => {
@@ -147,8 +200,32 @@ function RootLayoutContent() {
     }
   }, [deferredTheme]);
 
-  // Setup view is full-screen without sidebar
+  // Login and setup views are full-screen without sidebar
   const isSetupRoute = location.pathname === '/setup';
+  const isLoginRoute = location.pathname === '/login';
+
+  // Show login page (full screen, no sidebar)
+  if (isLoginRoute) {
+    return (
+      <main className="h-screen overflow-hidden" data-testid="app-container">
+        <Outlet />
+      </main>
+    );
+  }
+
+  // Wait for auth check before rendering protected routes (web mode only)
+  if (!isElectronMode() && !authChecked) {
+    return (
+      <main className="flex h-screen items-center justify-center" data-testid="app-container">
+        <div className="text-muted-foreground">Loading...</div>
+      </main>
+    );
+  }
+
+  // Redirect to login if not authenticated (web mode)
+  if (!isElectronMode() && !isAuthenticated) {
+    return null; // Will redirect via useEffect
+  }
 
   if (isSetupRoute) {
     return (

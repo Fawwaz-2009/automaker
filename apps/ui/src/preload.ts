@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Get server URL for HTTP client
   getServerUrl: (): Promise<string> => ipcRenderer.invoke('server:getUrl'),
 
+  // Get API key for authentication
+  getApiKey: (): Promise<string | null> => ipcRenderer.invoke('auth:getApiKey'),
+
   // Native dialogs - better UX than prompt()
   openDirectory: (): Promise<Electron.OpenDialogReturnValue> =>
     ipcRenderer.invoke('dialog:openDirectory'),

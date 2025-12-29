@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '@/store/app-store';
+import { useSetupStore } from '@/store/setup-store';
 
 import { useCliStatus, useSettingsView } from './settings-view/hooks';
 import { NAV_ITEMS } from './settings-view/config/navigation';
@@ -55,11 +56,15 @@ export function SettingsView() {
     setEnableSandboxMode,
   } = useAppStore();
 
+  const claudeAuthStatus = useSetupStore((state) => state.claudeAuthStatus);
+
   // Hide usage tracking when using API key (only show for Claude Code CLI users)
+  // Check both user-entered API key and environment variable ANTHROPIC_API_KEY
   // Also hide on Windows for now (CLI usage command not supported)
   const isWindows =
     typeof navigator !== 'undefined' && navigator.platform?.toLowerCase().includes('win');
-  const showUsageTracking = !apiKeys.anthropic && !isWindows;
+  const hasApiKey = !!apiKeys.anthropic || !!claudeAuthStatus?.hasEnvApiKey;
+  const showUsageTracking = !hasApiKey && !isWindows;
 
   // Convert electron Project to settings-view Project type
   const convertProject = (project: ElectronProject | null): SettingsProject | null => {

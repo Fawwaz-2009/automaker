@@ -41,12 +41,163 @@ const getServerUrl = (): string => {
   return 'http://localhost:3008';
 };
 
-// Get API key from environment variable
-const getApiKey = (): string | null => {
-  if (typeof window !== 'undefined') {
-    return import.meta.env.VITE_AUTOMAKER_API_KEY || null;
+// Cached API key for authentication (Electron mode only)
+let cachedApiKey: string | null = null;
+let apiKeyInitialized = false;
+
+// Cached session token for authentication (Web mode - explicit header auth)
+let cachedSessionToken: string | null = null;
+
+// Get API key for Electron mode (returns cached value after initialization)
+// Exported for use in WebSocket connections that need auth
+export const getApiKey = (): string | null => cachedApiKey;
+
+// Get session token for Web mode (returns cached value after login or token fetch)
+export const getSessionToken = (): string | null => cachedSessionToken;
+
+// Set session token (called after login or token fetch)
+export const setSessionToken = (token: string | null): void => {
+  cachedSessionToken = token;
+};
+
+// Clear session token (called on logout)
+export const clearSessionToken = (): void => {
+  cachedSessionToken = null;
+};
+
+/**
+ * Check if we're running in Electron mode
+ */
+export const isElectronMode = (): boolean => {
+  return typeof window !== 'undefined' && !!window.electronAPI?.getApiKey;
+};
+
+/**
+ * Initialize API key for Electron mode authentication.
+ * In web mode, authentication uses HTTP-only cookies instead.
+ *
+ * This should be called early in app initialization.
+ */
+export const initApiKey = async (): Promise<void> => {
+  if (apiKeyInitialized) return;
+  apiKeyInitialized = true;
+
+  // Only Electron mode uses API key header auth
+  if (typeof window !== 'undefined' && window.electronAPI?.getApiKey) {
+    try {
+      cachedApiKey = await window.electronAPI.getApiKey();
+      if (cachedApiKey) {
+        console.log('[HTTP Client] Using API key from Electron');
+        return;
+      }
+    } catch (error) {
+      console.warn('[HTTP Client] Failed to get API key from Electron:', error);
+    }
   }
-  return null;
+
+  // In web mode, authentication is handled via HTTP-only cookies
+  console.log('[HTTP Client] Web mode - using cookie-based authentication');
+};
+
+/**
+ * Check authentication status with the server
+ */
+export const checkAuthStatus = async (): Promise<{
+  authenticated: boolean;
+  required: boolean;
+}> => {
+  try {
+    const response = await fetch(`${getServerUrl()}/api/auth/status`, {
+      credentials: 'include',
+      headers: getApiKey() ? { 'X-API-Key': getApiKey()! } : undefined,
+    });
+    const data = await response.json();
+    return {
+      authenticated: data.authenticated ?? false,
+      required: data.required ?? true,
+    };
+  } catch (error) {
+    console.error('[HTTP Client] Failed to check auth status:', error);
+    return { authenticated: false, required: true };
+  }
+};
+
+/**
+ * Login with API key (for web mode)
+ */
+export const login = async (
+  apiKey: string
+): Promise<{ success: boolean; error?: string; token?: string }> => {
+  try {
+    const response = await fetch(`${getServerUrl()}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ apiKey }),
+    });
+    const data = await response.json();
+
+    // Store the session token if login succeeded
+    if (data.success && data.token) {
+      setSessionToken(data.token);
+      console.log('[HTTP Client] Session token stored after login');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('[HTTP Client] Login failed:', error);
+    return { success: false, error: 'Network error' };
+  }
+};
+
+/**
+ * Fetch session token from server (for page refresh when cookie exists)
+ * This retrieves the session token so it can be used for explicit header-based auth.
+ */
+export const fetchSessionToken = async (): Promise<boolean> => {
+  try {
+    const response = await fetch(`${getServerUrl()}/api/auth/token`, {
+      credentials: 'include', // Send the session cookie
+    });
+
+    if (!response.ok) {
+      console.log('[HTTP Client] No valid session to get token from');
+      return false;
+    }
+
+    const data = await response.json();
+    if (data.success && data.token) {
+      setSessionToken(data.token);
+      console.log('[HTTP Client] Session token retrieved from cookie session');
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.error('[HTTP Client] Failed to fetch session token:', error);
+    return false;
+  }
+};
+
+/**
+ * Logout (for web mode)
+ */
+export const logout = async (): Promise<{ success: boolean }> => {
+  try {
+    const response = await fetch(`${getServerUrl()}/api/auth/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+
+    // Clear the cached session token
+    clearSessionToken();
+    console.log('[HTTP Client] Session token cleared on logout');
+
+    return await response.json();
+  } catch (error) {
+    console.error('[HTTP Client] Logout failed:', error);
+    return { success: false };
+  }
 };
 
 type EventType =
@@ -87,7 +238,22 @@ export class HttpApiClient implements ElectronAPI {
     this.isConnecting = true;
 
     try {
-      const wsUrl = this.serverUrl.replace(/^http/, 'ws') + '/api/events';
+      let wsUrl = this.serverUrl.replace(/^http/, 'ws') + '/api/events';
+
+      // In Electron mode, add API key as query param for WebSocket auth
+      // (WebSocket doesn't support custom headers in browser)
+      const apiKey = getApiKey();
+      if (apiKey) {
+        wsUrl += `?apiKey=${encodeURIComponent(apiKey)}`;
+      } else {
+        // In web mode, add session token as query param
+        // (cookies may not work cross-origin, so use explicit token)
+        const sessionToken = getSessionToken();
+        if (sessionToken) {
+          wsUrl += `?sessionToken=${encodeURIComponent(sessionToken)}`;
+        }
+      }
+
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
@@ -155,10 +321,20 @@ export class HttpApiClient implements ElectronAPI {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
+
+    // Electron mode: use API key
     const apiKey = getApiKey();
     if (apiKey) {
       headers['X-API-Key'] = apiKey;
+      return headers;
     }
+
+    // Web mode: use session token if available
+    const sessionToken = getSessionToken();
+    if (sessionToken) {
+      headers['X-Session-Token'] = sessionToken;
+    }
+
     return headers;
   }
 
@@ -166,14 +342,17 @@ export class HttpApiClient implements ElectronAPI {
     const response = await fetch(`${this.serverUrl}${endpoint}`, {
       method: 'POST',
       headers: this.getHeaders(),
+      credentials: 'include', // Include cookies for session auth
       body: body ? JSON.stringify(body) : undefined,
     });
     return response.json();
   }
 
   private async get<T>(endpoint: string): Promise<T> {
-    const headers = this.getHeaders();
-    const response = await fetch(`${this.serverUrl}${endpoint}`, { headers });
+    const response = await fetch(`${this.serverUrl}${endpoint}`, {
+      headers: this.getHeaders(),
+      credentials: 'include', // Include cookies for session auth
+    });
     return response.json();
   }
 
@@ -181,6 +360,7 @@ export class HttpApiClient implements ElectronAPI {
     const response = await fetch(`${this.serverUrl}${endpoint}`, {
       method: 'PUT',
       headers: this.getHeaders(),
+      credentials: 'include', // Include cookies for session auth
       body: body ? JSON.stringify(body) : undefined,
     });
     return response.json();
@@ -190,6 +370,7 @@ export class HttpApiClient implements ElectronAPI {
     const response = await fetch(`${this.serverUrl}${endpoint}`, {
       method: 'DELETE',
       headers: this.getHeaders(),
+      credentials: 'include', // Include cookies for session auth
     });
     return response.json();
   }
