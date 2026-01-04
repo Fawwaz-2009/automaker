@@ -32,12 +32,12 @@ git push origin main
 
 ## Upstream Information
 
-| Property | Value |
-|----------|-------|
-| Upstream Repo | [AutoMaker-Org/automaker](https://github.com/AutoMaker-Org/automaker) |
-| Upstream Remote | `upstream` |
-| Upstream Branch | `main` |
-| Fork Base Tag | `fork-base` |
+| Property        | Value                                                                 |
+| --------------- | --------------------------------------------------------------------- |
+| Upstream Repo   | [AutoMaker-Org/automaker](https://github.com/AutoMaker-Org/automaker) |
+| Upstream Remote | `upstream`                                                            |
+| Upstream Branch | `main`                                                                |
+| Fork Base Tag   | `fork-base`                                                           |
 
 ## Customizations Registry
 
@@ -45,18 +45,18 @@ Track all fork-specific changes here. This helps during rebases and ensures noth
 
 ### New Files (Zero Conflict Risk)
 
-| File/Directory | Purpose | Added Date |
-|----------------|---------|------------|
-| `scripts/sync-upstream.sh` | Upstream sync tooling | 2026-01-04 |
-| `FORK.md` | This documentation | 2026-01-04 |
+| File/Directory                         | Purpose               | Added Date |
+| -------------------------------------- | --------------------- | ---------- |
+| `scripts/sync-upstream.sh`             | Upstream sync tooling | 2026-01-04 |
+| `FORK.md`                              | This documentation    | 2026-01-04 |
 | `.github/workflows/upstream-check.yml` | Upstream notification | 2026-01-04 |
 
 ### Modified Files (Track Carefully)
 
-| File | Change Description | Risk Level |
-|------|-------------------|------------|
-| `CLAUDE.md` | Added fork strategy section | Low |
-| `.gitignore` | (if modified) | Low |
+| File         | Change Description          | Risk Level |
+| ------------ | --------------------------- | ---------- |
+| `CLAUDE.md`  | Added fork strategy section | Low        |
+| `.gitignore` | (if modified)               | Low        |
 
 ### New Packages (Recommended for Features)
 
@@ -95,6 +95,7 @@ Based on git history analysis, here are the safest places to add customizations:
 ### Safe Zones (Rarely Changed - Low Conflict Risk)
 
 **Libraries:**
+
 - `libs/model-resolver/` - 1 change in history
 - `libs/prompts/src/enhancement.ts` - 1 change
 - `libs/prompts/src/merge.ts` - 1 change
@@ -102,6 +103,7 @@ Based on git history analysis, here are the safest places to add customizations:
 - `libs/dependency-resolver/` - 1-2 changes
 
 **Routes:**
+
 - `apps/server/src/routes/backlog-plan/` - 1 change
 - `apps/server/src/routes/pipeline/` - 1 change
 - `apps/server/src/routes/mcp/` - 1 change
@@ -109,13 +111,13 @@ Based on git history analysis, here are the safest places to add customizations:
 
 ### Hot Zones (Frequently Changed - Avoid Modifying)
 
-| File | Changes (6mo) | Recommendation |
-|------|---------------|----------------|
-| `apps/server/src/services/auto-mode-service.ts` | 70 | Do NOT modify |
-| `apps/ui/src/store/app-store.ts` | 28 | Do NOT modify |
-| `apps/server/src/index.ts` | 38 | Minimal changes only |
-| `apps/server/src/services/agent-service.ts` | 27 | Avoid if possible |
-| `apps/ui/src/lib/http-api-client.ts` | 31 | Do NOT modify |
+| File                                            | Changes (6mo) | Recommendation       |
+| ----------------------------------------------- | ------------- | -------------------- |
+| `apps/server/src/services/auto-mode-service.ts` | 70            | Do NOT modify        |
+| `apps/ui/src/store/app-store.ts`                | 28            | Do NOT modify        |
+| `apps/server/src/index.ts`                      | 38            | Minimal changes only |
+| `apps/server/src/services/agent-service.ts`     | 27            | Avoid if possible    |
+| `apps/ui/src/lib/http-api-client.ts`            | 31            | Do NOT modify        |
 
 ## Sync Workflow
 
@@ -197,6 +199,7 @@ if (FORK_FEATURES.useCustomProvider) {
 The codebase has natural extension points designed for customization:
 
 **Provider Factory** (`apps/server/src/providers/provider-factory.ts`):
+
 ```typescript
 // Add at TOP of the if-chain
 if (lowerModel.startsWith('your-')) {
@@ -205,6 +208,7 @@ if (lowerModel.startsWith('your-')) {
 ```
 
 **New Services** (create new file):
+
 ```typescript
 // apps/server/src/services/your-service.ts
 export class YourService {
@@ -228,6 +232,7 @@ If your change would benefit the community:
 ### "Working tree is not clean"
 
 Commit or stash your changes before syncing:
+
 ```bash
 git stash
 ./scripts/sync-upstream.sh
@@ -237,6 +242,7 @@ git stash pop
 ### "fork-base tag not found"
 
 First-time setup will create it automatically. Or manually:
+
 ```bash
 git tag fork-base HEAD
 ```
@@ -244,6 +250,7 @@ git tag fork-base HEAD
 ### Rebase fails with many conflicts
 
 Consider rebasing upstream/main in smaller chunks:
+
 ```bash
 # Find intermediate commits
 git log --oneline upstream/main | head -20
@@ -259,6 +266,66 @@ git rebase --abort
 git checkout main
 ```
 
+## Releasing New Versions
+
+### Quick Release (Recommended)
+
+Use the `/release` skill:
+
+```bash
+/release patch "Bug fixes and improvements"
+/release minor "New feature: custom provider support"
+/release major "Breaking: API changes"
+```
+
+### Manual Release Process
+
+1. **Bump version**:
+
+   ```bash
+   node apps/ui/scripts/bump-version.mjs patch  # or minor/major
+   ```
+
+2. **Commit the version bump**:
+
+   ```bash
+   git add apps/ui/package.json apps/server/package.json
+   git commit -m "chore: release v<version>"
+   ```
+
+3. **Create and push tag**:
+
+   ```bash
+   git tag -a v<version> -m "Release v<version>"
+   git push && git push --tags
+   ```
+
+4. **Create GitHub Release**:
+   - Go to https://github.com/Fawwaz-2009/automaker/releases
+   - Click "Create a new release"
+   - Select the tag you just pushed
+   - Add release notes
+   - Publish
+
+5. **GitHub Actions builds automatically**:
+   - macOS: `.dmg` and `.zip`
+   - Windows: `.exe`
+   - Linux: `.AppImage` and `.deb`
+
+### Download Artifacts
+
+After the release workflow completes:
+
+- Artifacts are attached to the GitHub release
+- Users can download and install directly
+
+### Auto-Updates (Future)
+
+The `electron-updater` package is configured. To enable auto-updates:
+
+1. Add update checking code to `apps/ui/src/main.ts`
+2. Users will be notified when new versions are available
+
 ## Changelog
 
 ### 2026-01-04 - Initial Fork Setup
@@ -268,3 +335,8 @@ git checkout main
 - Added fork documentation (`FORK.md`)
 - Added upstream notification workflow
 - Updated `CLAUDE.md` with fork strategy
+- Configured release infrastructure for fork:
+  - Updated `apps/ui/package.json` with fork repository
+  - Added `electron-updater` for future auto-update support
+  - Configured GitHub releases publish settings
+  - Changed appId to `com.automaker.fork.app` to avoid conflicts
