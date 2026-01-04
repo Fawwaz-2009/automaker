@@ -170,3 +170,130 @@ Use `resolveModelString()` from `@automaker/model-resolver` to convert model ali
 - `DATA_DIR` - Data storage directory (default: ./data)
 - `ALLOWED_ROOT_DIRECTORY` - Restrict file operations to specific directory
 - `AUTOMAKER_MOCK_AGENT=true` - Enable mock agent mode for CI testing
+
+---
+
+## Fork Strategy
+
+This is a fork of [AutoMaker-Org/automaker](https://github.com/AutoMaker-Org/automaker). We maintain it using a **history-preserving rebase** strategy for continuous upstream sync.
+
+### Critical Rules for AI Agents
+
+**BEFORE making any changes, understand:**
+
+1. **Check FORK.md** - Contains the customizations registry and safe zones
+2. **Prefer new files** - Never modify hot zone files unless absolutely necessary
+3. **Use extension points** - The codebase has designed insertion points
+
+### Safe Zones (Add Code Here)
+
+These locations rarely change upstream and are safe for customizations:
+
+```
+libs/your-package/           # NEW packages (zero conflict risk)
+apps/server/src/routes/your-feature/  # NEW route modules
+apps/server/src/services/your-service.ts  # NEW service files
+apps/server/src/config/      # NEW config files
+```
+
+### Hot Zones (DO NOT Modify)
+
+These files change frequently upstream. Modifying them causes rebase conflicts:
+
+| File | Risk | Alternative |
+|------|------|-------------|
+| `apps/server/src/services/auto-mode-service.ts` | VERY HIGH | Create new service |
+| `apps/ui/src/store/app-store.ts` | VERY HIGH | Create new store slice |
+| `apps/server/src/index.ts` | HIGH | Minimal registration only |
+| `apps/server/src/services/agent-service.ts` | HIGH | Extend via composition |
+| `apps/ui/src/lib/http-api-client.ts` | HIGH | Create wrapper |
+
+### How to Add Features Safely
+
+**1. New Package (Recommended for major features):**
+```bash
+mkdir -p libs/your-feature/src
+# Create package.json, tsconfig.json, src/index.ts
+# Already included in workspace via libs/*
+```
+
+**2. New Route Module:**
+```typescript
+// apps/server/src/routes/your-feature/index.ts
+export function createYourRoutes(services, events): Router {
+  const router = Router();
+  // Your endpoints
+  return router;
+}
+
+// Then ONE LINE in apps/server/src/index.ts:
+app.use('/api/your-feature', createYourRoutes(services, events));
+```
+
+**3. New Provider:**
+```typescript
+// apps/server/src/providers/your-provider.ts
+export class YourProvider extends BaseProvider {
+  // Implementation
+}
+
+// Add to provider-factory.ts at TOP of if-chain
+if (lowerModel.startsWith('your-')) {
+  return new YourProvider();
+}
+```
+
+**4. Feature Flags (for behavior changes):**
+```typescript
+// apps/server/src/config/fork-features.ts (NEW FILE)
+export const FORK_FEATURES = {
+  useCustomProvider: process.env.USE_CUSTOM_PROVIDER === 'true',
+};
+```
+
+### Syncing with Upstream
+
+```bash
+# Check for updates
+./scripts/sync-upstream.sh --check-only
+
+# Preview sync
+./scripts/sync-upstream.sh --dry-run
+
+# Perform sync
+./scripts/sync-upstream.sh
+
+# Test after sync
+npm run test:all
+```
+
+### When Modifying Existing Files
+
+If you MUST modify an existing file:
+
+1. **Document in FORK.md** - Add to "Modified Files" section
+2. **Keep changes minimal** - Smaller diffs = easier rebases
+3. **Use clear markers:**
+   ```typescript
+   // FORK: Your change description
+   yourCustomCode();
+   // END FORK
+   ```
+4. **Prefer composition** - Wrap/extend rather than modify
+
+### Extension Points Reference
+
+| Extension Point | Location | Pattern |
+|-----------------|----------|---------|
+| AI Providers | `providers/provider-factory.ts` | Add to if-chain |
+| API Routes | `routes/` directory | New module + register |
+| Services | `services/` directory | New file |
+| UI Views | `apps/ui/src/routes/` | New route file (TanStack auto-registers) |
+| Types | `libs/types/src/` | New type file + export |
+| Prompts | `libs/prompts/src/` | New file or use merge system |
+
+### See Also
+
+- `FORK.md` - Full fork documentation, customization registry, troubleshooting
+- `scripts/sync-upstream.sh` - Upstream sync tool
+- `.github/workflows/upstream-check.yml` - Automated upstream notifications
